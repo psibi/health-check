@@ -143,18 +143,19 @@ impl Cli {
 
         let child_pid = i32::try_from(child.id())?;
         static CHILD_WAS_KILLED: AtomicBool = AtomicBool::new(false);
-        std::thread::spawn({
-            let send = send.clone();
-            move || {
+
+        let send_clone = send.clone();
+        std::thread::scope(|s| {
+            s.spawn(move || {
                 handle_signals(
-                    send,
+                    send_clone,
                     nix::unistd::Pid::from_raw(child_pid),
                     &CHILD_WAS_KILLED,
                 )
-            }
-        });
+            });
 
-        std::thread::spawn(|| watch_child(send, child));
+            s.spawn(|| watch_child(send, child));
+        });
 
         let msg = recv.recv();
         // Drop the recv immediately, just a minor optimization to avoid
